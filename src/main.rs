@@ -20,6 +20,9 @@ struct Args {
     /// The output path (will overwrite!)
     #[arg(short, long)]
     output: PathBuf,
+    /// Output path is relative to Tabletop Simulator's saved objects directory
+    #[arg(short, long)]
+    tabletop: bool,
 }
 
 #[derive(Serialize)]
@@ -171,9 +174,20 @@ fn main() {
     if errors.is_empty() {
         let a = SaveState::new_for_deck(cards);
 
-        let a = serde_json::to_string_pretty(&a).unwrap();
+        let contents = serde_json::to_string_pretty(&a).unwrap();
 
-        std::fs::write(cli.output, a).unwrap();
+        if cli.tabletop {
+            let path = get_tts_dir();
+            match path {
+                Some(mut path) => {
+                    path.push(cli.output);
+                    std::fs::write(path, contents).unwrap();
+                }
+                None => panic!("Tabletop Simulator directory could not be found!"),
+            }
+        } else {
+            std::fs::write(cli.output, contents).unwrap();
+        }
     } else {
         for x in errors {
             eprintln!("{x}");
