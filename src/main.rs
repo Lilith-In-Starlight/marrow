@@ -316,11 +316,11 @@ fn parse_line(string: &str) -> Result<(i64, CustomDeckState), AtColumn> {
     let mut parserstate = ParserState::Numbering;
     let mut number_str = String::new();
     let mut name = String::new();
-    for (idx, char) in string.char_indices() {
+    for (idx, chr) in string.char_indices() {
         match parserstate {
-            ParserState::Numbering => match char {
-                ch @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') => {
-                    number_str.push(ch);
+            ParserState::Numbering => match chr {
+                chr @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') => {
+                    number_str.push(chr);
                 }
                 ' ' | '\t' => parserstate = ParserState::Exing,
                 'x' => parserstate = ParserState::Naming,
@@ -332,31 +332,22 @@ fn parse_line(string: &str) -> Result<(i64, CustomDeckState), AtColumn> {
                                 "`x` (number separator)".to_string(),
                                 "a number".to_string(),
                                 "a space".to_string(),
-                                "tab".to_string(),
+                                "a tab".to_string(),
                             ],
                         },
                         column: idx + 1,
                     })
                 }
             },
-            ParserState::Exing => match char {
+            ParserState::Exing => match chr {
                 ' ' | '\t' => continue,
                 'x' => parserstate = ParserState::Naming,
-                a => {
-                    return Err(AtColumn {
-                        error: Error::UnexpectedChar {
-                            obtained: a,
-                            expected: vec![
-                                "`x` (number separator)".to_string(),
-                                "space".to_string(),
-                                "tab".to_string(),
-                            ],
-                        },
-                        column: idx + 1,
-                    })
+                chr => {
+                    name.push(chr);
+                    parserstate = ParserState::Naming;
                 }
             },
-            ParserState::Naming => name.push(char),
+            ParserState::Naming => name.push(chr),
         }
     }
     let name = name.trim().to_owned();
