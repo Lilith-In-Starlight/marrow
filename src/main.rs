@@ -97,6 +97,8 @@ struct ObjectState {
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 struct CustomDeckState {
+    #[serde(skip)]
+    name: String,
     face_url: String,
     back_url: String,
     num_width: i64,
@@ -154,6 +156,7 @@ fn main() {
     let cli = Args::parse();
 
     let mut cards = vec![];
+    let mut used_names = vec![];
     let file = File::open(cli.input).unwrap();
     let mut reader = BufReader::new(file);
     let mut line_idx = 0;
@@ -164,7 +167,15 @@ fn main() {
         match reader.read_line(&mut line) {
             Ok(0) => break,
             Ok(_) => match parse_line(&line) {
-                Ok(card) => cards.push(card),
+                Ok(card) => {
+                    assert!(
+                        !used_names.contains(&card.1.name),
+                        "{} appears multiple times in the file, which is not allowed.",
+                        card.1.name
+                    );
+                    used_names.push(card.1.name.clone());
+                    cards.push(card);
+                }
                 Err(error) => errors.push(AtRow {
                     column: error,
                     row: line_idx,
@@ -376,6 +387,7 @@ fn parse_line(string: &str) -> Result<(i64, CustomDeckState), AtColumn> {
     let name = name.trim().to_owned();
 
     let card_data = CustomDeckState {
+        name: name.clone(),
         face_url: get_filegarden_link(&name),
         back_url: "https://file.garden/ZJSEzoaUL3bz8vYK/bloodlesscards/00%20back.png".to_string(),
         num_width: 1,
