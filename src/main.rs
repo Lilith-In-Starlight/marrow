@@ -1,15 +1,12 @@
 #![warn(clippy::pedantic)]
-use std::{
-    collections::HashMap,
-    fmt::Display,
-    fs::File,
-    io::{BufRead, BufReader},
-    path::PathBuf,
-};
+use shrek_deck::get_tts_dir;
+use shrek_deck::parser::parse_file;
+use shrek_deck::tts::CardShape;
+use shrek_deck::tts::SaveState;
+use shrek_deck::GetCardInfo;
+use std::path::PathBuf;
 
 use clap::{command, Parser};
-use serde::Serialize;
-use uuid::Uuid;
 
 #[derive(Parser)]
 #[command(version, about, long_about)]
@@ -28,397 +25,72 @@ struct Args {
     flask: bool,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "PascalCase")]
-struct SaveState {
-    save_name: String,
-    date: String,
-    version_number: String,
-    game_mode: String,
-    game_type: String,
-    game_complexity: String,
-    tags: Vec<String>,
-    gravity: f64,
-    play_area: f64,
-    table: String,
-    sky: String,
-    note: String,
-    tab_states: HashMap<String, String>,
-    lua_script: String,
-    lua_script_state: String,
-    #[serde(rename = "XmlUI")]
-    xml_ui: String,
-    object_states: Vec<ObjectState>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "PascalCase")]
-#[allow(clippy::struct_excessive_bools)]
-struct ObjectState {
-    guid: String,
+#[derive(Clone)]
+struct BloodlessCard {
     name: String,
-    transform: TransformState,
-    nickname: String,
-    description: String,
-    #[serde(rename = "GMNotes")]
-    gm_notes: String,
-    alt_look_angle: Vector3,
-    color_difuse: ColourState,
-    layout_group_sort_index: i64,
-    value: i64,
-    locked: bool,
-    grid: bool,
-    snap: bool,
-    #[serde(rename = "IgnoreFoW")]
-    ignore_fow: bool,
-    measure_movement: bool,
-    drag_selectable: bool,
-    autoraise: bool,
-    sticky: bool,
-    tooltip: bool,
-    grid_projection: bool,
-    hide_when_face_down: bool,
-    hands: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    card_id: Option<i64>,
-    sideways_card: bool,
-    #[serde(rename = "DeckIDs")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    deck_ids: Option<Vec<i64>>,
-    custom_deck: HashMap<i64, CustomDeckState>,
-    lua_script: String,
-    lua_script_state: String,
-    #[serde(rename = "XmlUI")]
-    xml_ui: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    contained_objects: Option<Vec<ObjectState>>,
 }
 
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "PascalCase")]
-struct CustomDeckState {
-    #[serde(skip)]
-    name: String,
-    face_url: String,
-    back_url: String,
-    num_width: i64,
-    num_height: i64,
-    back_is_hidden: bool,
-    unique_back: bool,
-    r#type: i64,
-}
+impl GetCardInfo for BloodlessCard {
+    fn get_name(&self) -> &str {
+        &self.name
+    }
 
-#[derive(Serialize, Default)]
-struct Vector3 {
-    x: f64,
-    y: f64,
-    z: f64,
-}
+    fn get_front_image(&self) -> Result<String, shrek_deck::CardError> {
+        Ok(get_filegarden_link(self.get_name()))
+    }
 
-#[derive(Serialize, Default)]
-struct ColourState {
-    r: f64,
-    g: f64,
-    b: f64,
-}
+    fn get_back_image(&self) -> Result<String, shrek_deck::CardError> {
+        Ok("https://file.garden/ZJSEzoaUL3bz8vYK/bloodlesscards/00%20back.png".to_string())
+    }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct TransformState {
-    pos_x: f64,
-    pos_y: f64,
-    pos_z: f64,
-    rot_x: f64,
-    rot_y: f64,
-    rot_z: f64,
-    scale_x: f64,
-    scale_y: f64,
-    scale_z: f64,
-}
+    fn get_card_shape(&self) -> Result<CardShape, shrek_deck::CardError> {
+        Ok(CardShape::RoundedRectangle)
+    }
 
-impl Default for TransformState {
-    fn default() -> Self {
-        Self {
-            pos_x: 0.0,
-            pos_y: 0.0,
-            pos_z: 0.0,
-            rot_x: 0.0,
-            rot_y: 0.0,
-            rot_z: 0.0,
-            scale_x: 1.0,
-            scale_y: 1.0,
-            scale_z: 1.0,
-        }
+    fn parse(string: &str) -> Result<Self, shrek_deck::parser::ParseError> {
+        Ok(BloodlessCard {
+            name: string.to_owned(),
+        })
     }
 }
 
 fn main() {
     let cli = Args::parse();
 
-    let mut cards = vec![];
-    let mut used_names = vec![];
-    let file = File::open(cli.input).unwrap();
-    let mut reader = BufReader::new(file);
-    let mut line_idx = 0;
-    let mut errors = vec![];
-    loop {
-        line_idx += 1;
-        let mut line = String::new();
-        match reader.read_line(&mut line) {
-            Ok(0) => break,
-            Ok(_) if !line.trim().is_empty() => match parse_line(&line) {
-                Ok(card) => {
-                    assert!(
-                        !used_names.contains(&card.1.name),
-                        "{} appears multiple times in the file, which is not allowed.",
-                        card.1.name
-                    );
-                    used_names.push(card.1.name.clone());
-                    cards.push(card);
-                }
-                Err(error) => errors.push(AtRow {
-                    column: error,
-                    row: line_idx,
-                }),
-            },
-            Ok(_) => continue,
-            Err(a) => panic!("Couldn't read line {line_idx} in the file because: {a}"),
-        }
-    }
+    match parse_file::<BloodlessCard>(&cli.input) {
+        Ok(cards) => {
+            let save = SaveState::new_with_deck(cards);
 
-    if errors.is_empty() {
-        let a = SaveState::new_for_deck(cards);
+            let contents = serde_json::to_string_pretty(&save).unwrap();
 
-        let contents = serde_json::to_string_pretty(&a).unwrap();
+            if cli.tabletop {
+                let path = get_tts_dir();
+                match path {
+                    Some(mut path) => {
+                        path.push(cli.output);
+                        std::fs::write(path.clone(), contents).unwrap();
 
-        if cli.tabletop {
-            let path = get_tts_dir();
-            match path {
-                Some(mut path) => {
-                    path.push(cli.output);
-                    std::fs::write(path.clone(), contents).unwrap();
-
-                    path.set_extension("png");
-                    if cli.flask {
-                        std::fs::write(path, include_bytes!("blood.png"))
-                    } else {
-                        std::fs::write(path, include_bytes!("card.png"))
+                        path.set_extension("png");
+                        if cli.flask {
+                            std::fs::write(path, include_bytes!("blood.png"))
+                        } else {
+                            std::fs::write(path, include_bytes!("card.png"))
+                        }
+                        .expect("Couldn't create image");
                     }
-                    .expect("Couldn't create image");
+                    None => eprintln!("Tabletop Simulator directory could not be found!"),
                 }
-                None => panic!("Tabletop Simulator directory could not be found!"),
+            } else {
+                std::fs::write(cli.output, contents).unwrap();
             }
-        } else {
-            std::fs::write(cli.output, contents).unwrap();
         }
-    } else {
-        for x in errors {
-            eprintln!("{x}");
-            eprintln!();
-        }
-    }
-}
-
-impl SaveState {
-    fn new_for_deck(deck: Vec<(i64, CustomDeckState)>) -> SaveState {
-        let (deck_ids, custom_deck, contained_objects) = generate_deck_data(deck);
-        let (deck_ids, contained_objects) = (Some(deck_ids), Some(contained_objects));
-        let object_state = ObjectState {
-            guid: generate_guid(),
-            name: "Deck".to_string(),
-            transform: TransformState {
-                rot_y: 180.0,
-                ..Default::default()
-            },
-            nickname: String::new(),
-            description: String::new(),
-            gm_notes: String::new(),
-            alt_look_angle: Vector3::default(),
-            color_difuse: ColourState {
-                r: 0.713_235_259,
-                g: 0.713_235_259,
-                b: 0.713_235_259,
-            },
-            layout_group_sort_index: 0,
-            value: 0,
-            locked: false,
-            grid: true,
-            snap: true,
-            ignore_fow: false,
-            measure_movement: false,
-            drag_selectable: true,
-            autoraise: true,
-            sticky: true,
-            tooltip: true,
-            grid_projection: false,
-            hide_when_face_down: true,
-            hands: false,
-            card_id: None,
-            sideways_card: false,
-            deck_ids,
-            custom_deck,
-            lua_script: String::new(),
-            lua_script_state: String::new(),
-            xml_ui: String::new(),
-            contained_objects,
-        };
-        let object_states = vec![object_state];
-        SaveState {
-            save_name: String::new(),
-            date: String::new(),
-            version_number: String::new(),
-            game_mode: String::new(),
-            game_type: String::new(),
-            game_complexity: String::new(),
-            tags: vec![],
-            gravity: 0.5,
-            play_area: 0.5,
-            table: String::new(),
-            sky: String::new(),
-            note: String::new(),
-            tab_states: HashMap::new(),
-            lua_script: String::new(),
-            lua_script_state: String::new(),
-            xml_ui: String::new(),
-            object_states,
+        Err(errors) => {
+            for x in errors {
+                eprintln!("{x}");
+                eprintln!();
+            }
         }
     }
-}
-
-fn generate_deck_data(
-    deck: Vec<(i64, CustomDeckState)>,
-) -> (Vec<i64>, HashMap<i64, CustomDeckState>, Vec<ObjectState>) {
-    let mut card_ids = vec![];
-    let mut custom_deck = HashMap::new();
-    let mut contained_objects = vec![];
-    let mut idx: i64 = 0;
-    for (amt, card) in deck {
-        idx += 1;
-        let id = idx * 100;
-        custom_deck.insert(idx, card.clone());
-        for _ in 0..amt {
-            card_ids.push(id);
-            contained_objects.push(ObjectState {
-                guid: generate_guid(),
-                name: "CardCustom".to_string(),
-                transform: TransformState::default(),
-                nickname: String::new(),
-                description: String::new(),
-                gm_notes: String::new(),
-                alt_look_angle: Vector3::default(),
-                color_difuse: ColourState {
-                    r: 0.713_235_259,
-                    g: 0.713_235_259,
-                    b: 0.713_235_259,
-                },
-                layout_group_sort_index: 0,
-                value: 0,
-                locked: false,
-                grid: true,
-                snap: true,
-                ignore_fow: false,
-                measure_movement: false,
-                drag_selectable: true,
-                autoraise: true,
-                sticky: true,
-                tooltip: true,
-                grid_projection: false,
-                hide_when_face_down: true,
-                hands: true,
-                card_id: Some(id),
-                sideways_card: false,
-                deck_ids: None,
-                custom_deck: {
-                    let mut hm = HashMap::new();
-                    hm.insert(idx, card.clone());
-                    hm
-                },
-                lua_script: String::new(),
-                lua_script_state: String::new(),
-                xml_ui: String::new(),
-                contained_objects: None,
-            });
-        }
-    }
-    (card_ids, custom_deck, contained_objects)
-}
-
-fn generate_guid() -> String {
-    Uuid::new_v4().to_string()
-}
-
-fn parse_line(string: &str) -> Result<(i64, CustomDeckState), AtColumn> {
-    let mut parserstate = ParserState::Numbering;
-    let mut number_str = String::new();
-    let mut name = String::new();
-    for (idx, chr) in string.char_indices() {
-        match parserstate {
-            ParserState::Numbering => match chr {
-                chr @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') => {
-                    number_str.push(chr);
-                }
-                ' ' | '\t' => parserstate = ParserState::Exing,
-                'x' => parserstate = ParserState::Naming,
-                chr => {
-                    let mut expected = vec!["a digit".to_string()];
-                    if !number_str.is_empty() {
-                        expected.push("a number separator (space, tab or `x`)".to_string());
-                        expected.push("a card name".to_string());
-                    }
-                    return Err(AtColumn {
-                        error: Error::UnexpectedChar {
-                            obtained: chr,
-                            expected,
-                        },
-                        column: idx + 1,
-                    });
-                }
-            },
-            ParserState::Exing => match chr {
-                ' ' | '\t' => continue,
-                'x' => parserstate = ParserState::Naming,
-                chr => {
-                    name.push(chr);
-                    parserstate = ParserState::Naming;
-                }
-            },
-            ParserState::Naming => name.push(chr),
-        }
-    }
-    let name = name.trim().to_owned();
-
-    let number = number_str.parse().expect("couldn't parse number");
-
-    if number == 0 {
-        return Err(AtColumn {
-            error: Error::AmountIsZero { card_name: name },
-            column: 0,
-        });
-    } else if name.is_empty() {
-        return Err(AtColumn {
-            error: Error::NameIsEmpty,
-            column: 0,
-        });
-    }
-
-    let card_data = CustomDeckState {
-        name: name.clone(),
-        face_url: get_filegarden_link(&name),
-        back_url: "https://file.garden/ZJSEzoaUL3bz8vYK/bloodlesscards/00%20back.png".to_string(),
-        num_width: 1,
-        num_height: 1,
-        back_is_hidden: true,
-        unique_back: false,
-        r#type: 0,
-    };
-
-    Ok((number, card_data))
-}
-
-enum ParserState {
-    Numbering,
-    Naming,
-    Exing,
 }
 
 fn get_filegarden_link(name: &str) -> String {
@@ -426,97 +98,4 @@ fn get_filegarden_link(name: &str) -> String {
         "https://file.garden/ZJSEzoaUL3bz8vYK/bloodlesscards/{}.png",
         name.replace(' ', "").replace('ä', "a")
     )
-}
-
-enum Error {
-    UnexpectedChar {
-        obtained: char,
-        expected: Vec<String>,
-    },
-    AmountIsZero {
-        card_name: String,
-    },
-    NameIsEmpty,
-}
-
-struct AtColumn {
-    error: Error,
-    column: usize,
-}
-
-struct AtRow {
-    column: AtColumn,
-    row: usize,
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::UnexpectedChar { obtained, expected } => {
-                let obtained = if *obtained == '\n' || *obtained == '\r' {
-                    "<newline>".to_string()
-                } else if *obtained == '\t' {
-                    "<tab>".to_string()
-                } else {
-                    obtained.to_string()
-                };
-                write!(
-                    f,
-                    "\n Obtained character `{obtained}`, expected one of the following: "
-                )?;
-
-                for expected in expected {
-                    write!(f, "\n - {expected}")?;
-                }
-
-                Ok(())
-            }
-            Error::AmountIsZero { card_name } => write!(
-                f,
-                "Tried to create {card_name} with an amount of 0, which is frankly ridiculous."
-            ),
-            Error::NameIsEmpty => write!(f, "Tried to create a card with an empty name"),
-        }
-    }
-}
-
-impl Display for AtRow {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.column.column == 0 {
-            write!(f, "Error at line {}: {}", self.row, self.column.error)
-        } else {
-            write!(
-                f,
-                "Error at line {}, column {}: {}",
-                self.row, self.column.column, self.column.error
-            )
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn get_tts_dir() -> Option<PathBuf> {
-    let mut dir = dirs::home_dir();
-    if let Some(dir) = dir.as_mut() {
-        dir.push("Documents\\My Games\\Tabletop Simulator\\Saves\\Saved Objects");
-    }
-    dir
-}
-
-#[cfg(target_os = "macos")]
-fn get_tts_dir() -> Option<PathBuf> {
-    let mut dir = dirs::home_dir();
-    if let Some(dir) = dir.as_mut() {
-        dir.push("Library/Tabletop Simulator/Saves/Saved Objects");
-    }
-    dir
-}
-
-#[cfg(target_os = "linux")]
-fn get_tts_dir() -> Option<PathBuf> {
-    let mut dir = dirs::home_dir();
-    if let Some(dir) = dir.as_mut() {
-        dir.push(".local/share/Tabletop Simulator/Saves/Saved Objects");
-    }
-    dir
 }
