@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic)]
-use shrek_deck::get_tts_dir;
 use shrek_deck::parser::parse_file;
+use shrek_deck::tts::write_to_tts_dir;
 use shrek_deck::tts::CardShape;
 use shrek_deck::tts::SaveState;
 use shrek_deck::GetCardInfo;
@@ -59,29 +59,32 @@ fn main() {
 
     match parse_file::<BloodlessCard>(&cli.input) {
         Ok(cards) => {
-            let save = SaveState::new_with_deck(cards);
+            let save = match SaveState::new_with_deck(cards) {
+                Ok(x) => x,
+                Err(x) => return eprintln!("{x}"),
+            };
 
-            let contents = serde_json::to_string_pretty(&save).unwrap();
+            let contents = match serde_json::to_string_pretty(&save) {
+                Ok(x) => x,
+                Err(err) => return eprintln!("{err}"),
+            };
 
             if cli.tabletop {
-                let path = get_tts_dir();
-                match path {
-                    Some(mut path) => {
-                        path.push(cli.output);
-                        std::fs::write(path.clone(), contents).unwrap();
+                let result = if cli.flask {
+                    write_to_tts_dir(cli.output, contents, include_bytes!("blood.png"))
+                } else {
+                    write_to_tts_dir(cli.output, contents, include_bytes!("card.png"))
+                };
 
-                        path.set_extension("png");
-                        if cli.flask {
-                            std::fs::write(path, include_bytes!("blood.png"))
-                        } else {
-                            std::fs::write(path, include_bytes!("card.png"))
-                        }
-                        .expect("Couldn't create image");
-                    }
-                    None => eprintln!("Tabletop Simulator directory could not be found!"),
+                match result {
+                    Ok(()) => (),
+                    Err(error) => eprintln!("{error}"),
                 }
             } else {
-                std::fs::write(cli.output, contents).unwrap();
+                match std::fs::write(cli.output, contents) {
+                    Ok(()) => (),
+                    Err(error) => eprintln!("{error}"),
+                }
             }
         }
         Err(errors) => {
