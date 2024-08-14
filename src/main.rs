@@ -166,7 +166,7 @@ fn main() {
         let mut line = String::new();
         match reader.read_line(&mut line) {
             Ok(0) => break,
-            Ok(_) => match parse_line(&line) {
+            Ok(_) if !line.trim().is_empty() => match parse_line(&line) {
                 Ok(card) => {
                     assert!(
                         !used_names.contains(&card.1.name),
@@ -181,6 +181,7 @@ fn main() {
                     row: line_idx,
                 }),
             },
+            Ok(_) => continue,
             Err(a) => panic!("Couldn't read line {line_idx} in the file because: {a}"),
         }
     }
@@ -358,19 +359,19 @@ fn parse_line(string: &str) -> Result<(i64, CustomDeckState), AtColumn> {
                 }
                 ' ' | '\t' => parserstate = ParserState::Exing,
                 'x' => parserstate = ParserState::Naming,
-                a => {
+                chr => {
+                    let mut expected = vec!["a digit".to_string()];
+                    if !number_str.is_empty() {
+                        expected.push("a number separator (space, tab or `x`)".to_string());
+                        expected.push("a card name".to_string());
+                    }
                     return Err(AtColumn {
                         error: Error::UnexpectedChar {
-                            obtained: a,
-                            expected: vec![
-                                "`x` (number separator)".to_string(),
-                                "a number".to_string(),
-                                "a space".to_string(),
-                                "a tab".to_string(),
-                            ],
+                            obtained: chr,
+                            expected,
                         },
                         column: idx + 1,
-                    })
+                    });
                 }
             },
             ParserState::Exing => match chr {
@@ -386,6 +387,20 @@ fn parse_line(string: &str) -> Result<(i64, CustomDeckState), AtColumn> {
     }
     let name = name.trim().to_owned();
 
+    let number = number_str.parse().expect("couldn't parse number");
+
+    if number == 0 {
+        return Err(AtColumn {
+            error: Error::AmountIsZero { card_name: name },
+            column: 0,
+        });
+    } else if name.is_empty() {
+        return Err(AtColumn {
+            error: Error::NameIsEmpty,
+            column: 0,
+        });
+    }
+
     let card_data = CustomDeckState {
         name: name.clone(),
         face_url: get_filegarden_link(&name),
@@ -397,10 +412,7 @@ fn parse_line(string: &str) -> Result<(i64, CustomDeckState), AtColumn> {
         r#type: 0,
     };
 
-    Ok((
-        number_str.parse().expect("couldn't parse number"),
-        card_data,
-    ))
+    Ok((number, card_data))
 }
 
 enum ParserState {
@@ -421,6 +433,10 @@ enum Error {
         obtained: char,
         expected: Vec<String>,
     },
+    AmountIsZero {
+        card_name: String,
+    },
+    NameIsEmpty,
 }
 
 struct AtColumn {
@@ -437,6 +453,13 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::UnexpectedChar { obtained, expected } => {
+                let obtained = if *obtained == '\n' || *obtained == '\r' {
+                    "<newline>".to_string()
+                } else if *obtained == '\t' {
+                    "<tab>".to_string()
+                } else {
+                    obtained.to_string()
+                };
                 write!(
                     f,
                     "\n Obtained character `{obtained}`, expected one of the following: "
@@ -448,6 +471,11 @@ impl Display for Error {
 
                 Ok(())
             }
+            Error::AmountIsZero { card_name } => write!(
+                f,
+                "Tried to create {card_name} with an amount of 0, which is frankly ridiculous."
+            ),
+            Error::NameIsEmpty => write!(f, "Tried to create a card with an empty name"),
         }
     }
 }
