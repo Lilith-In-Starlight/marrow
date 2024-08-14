@@ -1,3 +1,4 @@
+#![warn(clippy::pedantic)]
 use std::{
     collections::HashMap,
     fmt::Display,
@@ -46,6 +47,7 @@ struct SaveState {
 
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
+#[allow(clippy::struct_excessive_bools)]
 struct ObjectState {
     guid: String,
     name: String,
@@ -162,7 +164,7 @@ fn main() {
                     row: line_idx,
                 }),
             },
-            Err(_) => panic!("Couldn't read line {line_idx} in the file"),
+            Err(a) => panic!("Couldn't read line {line_idx} in the file because: {a}"),
         }
     }
 
@@ -174,8 +176,8 @@ fn main() {
         std::fs::write(cli.output, a).unwrap();
     } else {
         for x in errors {
-            println!("{x}");
-            println!();
+            eprintln!("{x}");
+            eprintln!();
         }
     }
 }
@@ -191,14 +193,14 @@ impl SaveState {
                 rot_y: 180.0,
                 ..Default::default()
             },
-            nickname: "".to_string(),
-            description: "".to_string(),
-            gm_notes: "".to_string(),
+            nickname: String::new(),
+            description: String::new(),
+            gm_notes: String::new(),
             alt_look_angle: Vector3::default(),
             color_difuse: ColourState {
-                r: 0.713235259,
-                g: 0.713235259,
-                b: 0.713235259,
+                r: 0.713_235_259,
+                g: 0.713_235_259,
+                b: 0.713_235_259,
             },
             layout_group_sort_index: 0,
             value: 0,
@@ -218,29 +220,29 @@ impl SaveState {
             sideways_card: false,
             deck_ids,
             custom_deck,
-            lua_script: "".to_string(),
-            lua_script_state: "".to_string(),
-            xml_ui: "".to_string(),
+            lua_script: String::new(),
+            lua_script_state: String::new(),
+            xml_ui: String::new(),
             contained_objects,
         };
         let object_states = vec![object_state];
         SaveState {
-            save_name: "".to_string(),
-            date: "".to_string(),
-            version_number: "".to_string(),
-            game_mode: "".to_string(),
-            game_type: "".to_string(),
-            game_complexity: "".to_string(),
+            save_name: String::new(),
+            date: String::new(),
+            version_number: String::new(),
+            game_mode: String::new(),
+            game_type: String::new(),
+            game_complexity: String::new(),
             tags: vec![],
             gravity: 0.5,
             play_area: 0.5,
-            table: "".to_string(),
-            sky: "".to_string(),
-            note: "".to_string(),
+            table: String::new(),
+            sky: String::new(),
+            note: String::new(),
             tab_states: HashMap::new(),
-            lua_script: "".to_string(),
-            lua_script_state: "".to_string(),
-            xml_ui: "".to_string(),
+            lua_script: String::new(),
+            lua_script_state: String::new(),
+            xml_ui: String::new(),
             object_states,
         }
     }
@@ -265,14 +267,14 @@ fn generate_deck_data(
                 guid: generate_guid(),
                 name: "CardCustom".to_string(),
                 transform: TransformState::default(),
-                nickname: "".to_string(),
-                description: "".to_string(),
-                gm_notes: "".to_string(),
+                nickname: String::new(),
+                description: String::new(),
+                gm_notes: String::new(),
                 alt_look_angle: Vector3::default(),
                 color_difuse: ColourState {
-                    r: 0.713235259,
-                    g: 0.713235259,
-                    b: 0.713235259,
+                    r: 0.713_235_259,
+                    g: 0.713_235_259,
+                    b: 0.713_235_259,
                 },
                 layout_group_sort_index: 0,
                 value: 0,
@@ -296,11 +298,11 @@ fn generate_deck_data(
                     hm.insert(idx, card.clone());
                     hm
                 },
-                lua_script: "".to_string(),
-                lua_script_state: "".to_string(),
-                xml_ui: "".to_string(),
+                lua_script: String::new(),
+                lua_script_state: String::new(),
+                xml_ui: String::new(),
                 contained_objects: None,
-            })
+            });
         }
     }
     (card_ids, custom_deck, contained_objects)
@@ -318,7 +320,7 @@ fn parse_line(string: &str) -> Result<(i64, CustomDeckState), AtColumn> {
         match parserstate {
             ParserState::Numbering => match char {
                 ch @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') => {
-                    number_str.push(ch)
+                    number_str.push(ch);
                 }
                 ' ' | '\t' => parserstate = ParserState::Exing,
                 'x' => parserstate = ParserState::Naming,
@@ -432,4 +434,31 @@ impl Display for AtRow {
             self.column.column, self.row, self.column.error
         )
     }
+}
+
+#[cfg(target_os = "windows")]
+fn get_tts_dir() -> Option<PathBuf> {
+    let mut dir = dirs::home_dir();
+    if let Some(dir) = dir.as_mut() {
+        dir.push("Documents\\My Games\\Tabletop Simulator\\Saves\\Saved Objects");
+    }
+    dir
+}
+
+#[cfg(target_os = "macos")]
+fn get_tts_dir() -> Option<PathBuf> {
+    let mut dir = dirs::home_dir();
+    if let Some(dir) = dir.as_mut() {
+        dir.push("Library/Tabletop Simulator/Saves/Saved Objects");
+    }
+    dir
+}
+
+#[cfg(target_os = "linux")]
+fn get_tts_dir() -> Option<PathBuf> {
+    let mut dir = dirs::home_dir();
+    if let Some(dir) = dir.as_mut() {
+        dir.push(".local/share/Tabletop Simulator/Saves/Saved Objects");
+    }
+    dir
 }
