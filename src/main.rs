@@ -20,9 +20,12 @@ struct Args {
     /// The output path (will overwrite!)
     #[arg(short, long)]
     output: PathBuf,
-    /// Output path is relative to Tabletop Simulator's saved objects directory
+    /// Output path is relative to Tabletop Simulator's saved objects directory. Will overwrite existing objects.
     #[arg(short, long)]
     tabletop: bool,
+    /// Output should use the blood card back as thumbnail (does nothing if not using the --tabletop flag)
+    #[arg(short, long)]
+    flask: bool,
 }
 
 #[derive(Serialize)]
@@ -181,7 +184,15 @@ fn main() {
             match path {
                 Some(mut path) => {
                     path.push(cli.output);
-                    std::fs::write(path, contents).unwrap();
+                    std::fs::write(path.clone(), contents).unwrap();
+
+                    path.set_extension("png");
+                    if cli.flask {
+                        std::fs::write(path, include_bytes!("blood.png"))
+                    } else {
+                        std::fs::write(path, include_bytes!("card.png"))
+                    }
+                    .expect("Couldn't create image");
                 }
                 None => panic!("Tabletop Simulator directory could not be found!"),
             }
