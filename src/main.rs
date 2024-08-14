@@ -279,11 +279,9 @@ fn generate_deck_data(
     let mut card_ids = vec![];
     let mut custom_deck = HashMap::new();
     let mut contained_objects = vec![];
-    for (idx, (amt, card)) in deck
-        .into_iter()
-        .enumerate()
-        .map(|(idx, card)| ((idx + 1) as i64, card))
-    {
+    let mut idx: i64 = 0;
+    for (amt, card) in deck {
+        idx += 1;
         let id = idx * 100;
         custom_deck.insert(idx, card.clone());
         for _ in 0..amt {
