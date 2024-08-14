@@ -482,11 +482,15 @@ impl Display for Error {
 
 impl Display for AtRow {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Error at line {}, column {}: {}",
-            self.column.column, self.row, self.column.error
-        )
+        if self.column.column == 0 {
+            write!(f, "Error at line {}: {}", self.row, self.column.error)
+        } else {
+            write!(
+                f,
+                "Error at line {}, column {}: {}",
+                self.row, self.column.column, self.column.error
+            )
+        }
     }
 }
 
