@@ -268,9 +268,9 @@ dependencies = [
 
 [[package]]
 name = "shrek-deck"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbc27ea5305655a7dea4cd5a775050a9a3ec62e037afbb70f01a52ac479548a1"
+checksum = "ae29c040c923ec8c2ce4fc1cfe9f3b5f4d7be149f26f70d3e2835c3dc567986c"
 dependencies = [
  "dirs",
  "serde",

@@ -1,5 +1,6 @@
 #![warn(clippy::pedantic)]
 use shrek_deck::parser::parse_file;
+use shrek_deck::tts;
 use shrek_deck::tts::write_to_tts_dir;
 use shrek_deck::tts::CardShape;
 use shrek_deck::tts::SaveState;
@@ -79,6 +80,15 @@ fn main() {
             };
 
             if cli.tabletop {
+                if let Some(path) = cli.output.parent() {
+                    let Some(mut saved_object) = tts::get_saved_objects_dir() else {
+                        panic!("Failed to find saved objects dir")
+                    };
+                    saved_object.push(path);
+                    std::fs::create_dir_all(saved_object)
+                        .expect("Failed to create folders needed for output path");
+                }
+
                 let result = if cli.flask {
                     write_to_tts_dir(cli.output, contents, include_bytes!("blood.png"))
                 } else {
