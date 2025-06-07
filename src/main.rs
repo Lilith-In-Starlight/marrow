@@ -28,6 +28,7 @@ struct Args {
 #[derive(Clone)]
 struct BloodlessCard {
     name: String,
+    back: String,
 }
 
 impl GetCardInfo for BloodlessCard {
@@ -40,7 +41,7 @@ impl GetCardInfo for BloodlessCard {
     }
 
     fn get_back_image(&self) -> Result<String, shrek_deck::CardError> {
-        Ok("https://file.garden/ZJSEzoaUL3bz8vYK/bloodlesscards/00%20back.png".to_string())
+        Ok(self.back.clone())
     }
 
     fn get_card_shape(&self) -> Result<CardShape, shrek_deck::CardError> {
@@ -50,6 +51,7 @@ impl GetCardInfo for BloodlessCard {
     fn parse(string: &str) -> Result<Self, shrek_deck::parser::ParseError> {
         Ok(BloodlessCard {
             name: string.to_owned(),
+            back: "https://file.garden/ZJSEzoaUL3bz8vYK/bloodlesscards/00%20back.png".to_string(),
         })
     }
 }
@@ -58,7 +60,14 @@ fn main() {
     let cli = Args::parse();
 
     match parse_file::<BloodlessCard>(&cli.input) {
-        Ok(cards) => {
+        Ok(mut cards) => {
+            if cli.flask {
+                for card in &mut cards {
+                    card.card.back =
+                        "https://file.garden/ZJSEzoaUL3bz8vYK/bloodlesscards/flaskvack.png"
+                            .to_string();
+                }
+            }
             let save = match SaveState::new_with_deck(cards) {
                 Ok(x) => x,
                 Err(x) => return eprintln!("{x}"),
