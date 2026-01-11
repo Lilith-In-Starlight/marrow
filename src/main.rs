@@ -1,4 +1,6 @@
 #![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
+
 use shrek_deck::parser::parse_file;
 use shrek_deck::tts;
 use shrek_deck::tts::write_to_tts_dir;
@@ -50,7 +52,7 @@ impl GetCardInfo for BloodlessCard {
     }
 
     fn parse(string: &str) -> Result<Self, shrek_deck::parser::ParseError> {
-        Ok(BloodlessCard {
+        Ok(Self {
             name: string.to_owned(),
             back: "https://file.garden/ZJSEzoaUL3bz8vYK/bloodlesscards/00%20back.png".to_string(),
         })
@@ -117,7 +119,7 @@ fn main() {
 
 fn get_filegarden_link(name: &str) -> String {
     format!(
-        "https://file.garden/ZJSEzoaUL3bz8vYK/bloodlesscards/{}.png",
+        "https://hemolymph.net/cardimgs/{}.png",
         name.replace(' ', "").replace('ä', "a")
     )
 }
