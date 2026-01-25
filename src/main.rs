@@ -7,7 +7,6 @@ use shrek_deck::tts::write_to_tts_dir;
 use shrek_deck::tts::CardShape;
 use shrek_deck::tts::SaveState;
 use shrek_deck::GetCardInfo;
-use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use walkdir::WalkDir;
@@ -17,16 +16,22 @@ use clap::{command, Parser};
 #[derive(Parser)]
 #[command(version, about, long_about)]
 struct Args {
-    /// The path to the deck file
+    /// The path to the deck file or a directory of deck files.
+    ///
+    /// If it's a directory, it will traverse the entire tree looking for deck files. Deck files have the .marrow or .mflask extension.
     #[arg(short, long)]
     input: PathBuf,
     /// The output path (will overwrite!)
+    ///
+    /// Output files always have their extension set to .json.
+    ///
+    /// If `input` is a directory, `output` must be a directory as well.
     #[arg(short, long)]
     output: PathBuf,
-    /// Output path is relative to Tabletop Simulator's saved objects directory. Will overwrite existing objects.
+    /// Treat output path as relative to Tabletop Simulator's saved objects directory. Will overwrite existing objects.
     #[arg(short, long)]
     tabletop: bool,
-    /// Output should use the blood card back as thumbnail (does nothing if not using the --tabletop flag)
+    /// Output should use the blood card back as thumbnail (does nothing if not using the --tabletop flag). If compiling a directory, use the .mflask extension as a replacement for this flag.
     #[arg(short, long)]
     flask: bool,
 }
@@ -100,7 +105,7 @@ fn dir_input(cli: &Args) {
         let mut components = entry.path().components();
 
         // Remove root dir of this path
-        for i in cli.input.components() {
+        for _ in cli.input.components() {
             components.next();
         }
 
