@@ -13,6 +13,9 @@ use walkdir::WalkDir;
 
 use clap::{command, Parser};
 
+static BACK_IMG: &[u8] = include_bytes!("card.png");
+static FLASK_IMG: &[u8] = include_bytes!("blood.png");
+
 #[derive(Parser)]
 #[command(version, about, long_about)]
 struct Args {
@@ -48,7 +51,7 @@ impl GetCardInfo for BloodlessCard {
     }
 
     fn get_front_image(&self) -> Result<String, shrek_deck::CardError> {
-        Ok(get_filegarden_link(self.get_name()))
+        Ok(get_image_link(self.get_name()))
     }
 
     fn get_back_image(&self) -> Result<String, shrek_deck::CardError> {
@@ -71,13 +74,13 @@ fn main() {
     let cli = Args::parse();
 
     if cli.input.is_file() {
-        file_input(cli);
+        single_input(cli);
     } else if cli.input.is_dir() {
         dir_input(&cli);
     }
 }
 
-fn get_filegarden_link(name: &str) -> String {
+fn get_image_link(name: &str) -> String {
     format!(
         "https://hemolymph.net/cardimgs/{}.png",
         name.replace(' ', "").replace('ä', "a")
@@ -86,7 +89,7 @@ fn get_filegarden_link(name: &str) -> String {
 
 fn dir_input(cli: &Args) {
     for entry in WalkDir::new(&cli.input).follow_links(true) {
-        let entry = match entry {
+        let current_file = match entry {
             Ok(entry) => entry,
             Err(err) => {
                 eprintln!("Error: {err}");
@@ -94,31 +97,32 @@ fn dir_input(cli: &Args) {
             }
         };
 
-        let ext = entry.path().extension();
+        let current_path = current_file.path();
 
-        if ext.is_none_or(|x| x != "marrow" && x != "mflask") {
+        let ext = current_path.extension();
+
+        if ext.is_none_or(|ext| ext != "marrow" && ext != "mflask") {
             continue;
         }
 
         let flask = ext.is_some_and(|x| x == "mflask");
 
-        let mut components = entry.path().components();
+        // Remove `cli.input` from the current file's path
+        let mut path_components = current_path.components();
 
-        // Remove root dir of this path
+        // The first components of `current_path` are just all the components of `cli.input`
         for _ in cli.input.components() {
-            components.next();
+            path_components.next();
         }
+        let path_tail = path_components.as_path();
 
-        let rest = components.as_path();
-
+        // Then add `cli.output` in its stead
         let mut output = cli.output.clone();
+        output.push(path_tail);
 
-        output.push(rest);
-
-        println!("{}", output.display());
-
-        file_input(Args {
-            input: entry.path().to_path_buf(),
+        // And process this file as if it were a single file input
+        single_input(Args {
+            input: current_path.to_path_buf(),
             output,
             tabletop: cli.tabletop,
             flask,
@@ -126,7 +130,7 @@ fn dir_input(cli: &Args) {
     }
 }
 
-fn file_input(cli: Args) {
+fn single_input(cli: Args) {
     let mut cards = match parse_file::<BloodlessCard>(&cli.input) {
         Ok(cards) => cards,
         Err(errors) => {
@@ -144,6 +148,7 @@ fn file_input(cli: Args) {
                 "https://file.garden/ZJSEzoaUL3bz8vYK/bloodlesscards/flaskvack.png".to_string();
         }
     }
+
     let save = match SaveState::new_with_deck(cards) {
         Ok(x) => x,
         Err(x) => return eprintln!("{x}"),
@@ -156,11 +161,9 @@ fn file_input(cli: Args) {
 
     if cli.tabletop {
         create_all_needed_folders(&cli.output);
-        let result = if cli.flask {
-            write_to_tts_dir(cli.output, contents, include_bytes!("blood.png"))
-        } else {
-            write_to_tts_dir(cli.output, contents, include_bytes!("card.png"))
-        };
+        let image = if cli.flask { FLASK_IMG } else { BACK_IMG };
+
+        let result = write_to_tts_dir(cli.output, contents, image);
 
         match result {
             Ok(()) => (),
@@ -176,14 +179,11 @@ fn file_input(cli: Args) {
 }
 
 fn create_all_needed_folders(path: &Path) {
-    let path = if path.is_dir() {
-        path
-    } else {
-        path.parent().unwrap()
-    };
+    let path = path.parent().unwrap();
     let Some(mut saved_object) = tts::get_saved_objects_dir() else {
         panic!("Failed to find saved objects dir")
     };
+
     saved_object.push(path);
     std::fs::create_dir_all(&saved_object)
         .expect("Failed to create folders needed for output path");
